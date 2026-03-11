@@ -1,0 +1,21 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 01bdaac183bc7884f9e34ed054ec4d39, type: 3}
+  m_Name: Unit_1_Data 1
+  m_EditorClassIdentifier: Assembly-CSharp::Data.UnitData
+  unitName: Unit_1_1
+  tier: 1
+  attackDamage: 10
+  attackSpeed: 1
+  attackRange: 3
+  unitPrefab: {fileID: 7232828574371994007, guid: d29eb6caf8dbe4042a0a9299e836eee1, type: 3}
+  projectilePrefab: {fileID: 7790295092827843802, guid: bf871b5cc4fd7a84fa478e609bb4655c, type: 3}
