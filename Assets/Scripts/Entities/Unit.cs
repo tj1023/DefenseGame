@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Combat;
 using Data;
 using Managers;
@@ -5,14 +6,14 @@ using UnityEngine;
 
 namespace Entities
 {
-    public class Unit : MonoBehaviour, IDraggable
+    public class Unit : MonoBehaviour, IClickable, IDraggable
     {
         [Header("Data")]
         [SerializeField] private UnitData unitData;
 
-        private UnitData UnitData => unitData;
+        public UnitData UnitData => unitData;
 
-        private Vector2Int CurrentCellIndex { get; set; }
+        public Vector2Int CurrentCellIndex { get; private set; }
 
         // OverlapCircle을 위한 결과 배열 캐싱
         private static readonly Collider2D[] OverlapResults = new Collider2D[100];
@@ -22,13 +23,22 @@ namespace Entities
         private Enemy _targetEnemy;
 
         [Header("Drag and Merge")]
-        private Vector3 _dragStartPos;
         private bool _isDragging;
+        
+        // 그룹 드래그를 위한 오프셋 (마우스 위치 기준 각 유닛의 상대 위치)
+        private Vector3 _dragOffset;
+        private List<Unit> _dragGroup;
 
         public void Initialize(UnitData data, Vector2Int cellIndex)
         {
             unitData = data;
             CurrentCellIndex = cellIndex;
+        }
+        
+        // BoardManager에서 스왑 시 호출하여 내부 인덱스를 갱신하도록 함
+        public void UpdateTargetCellIndex(Vector2Int newIndex)
+        {
+            CurrentCellIndex = newIndex;
         }
 
         private void Update()
@@ -118,21 +128,47 @@ namespace Entities
         }
         #endregion
 
-        #region Merge Logic
+        #region Drag and Merge Logic
+        
+        public void OnClick()
+        {
+            // 사실상 같은 셀에는 동일 유닛만 존재하므로 전체 리스트가 동일 유닛들임
+            List<Unit> identicalUnits = BoardManager.Instance.GetUnitsAt(CurrentCellIndex);
+
+            if (identicalUnits.Count >= 3)
+            {
+                MergeUnits(identicalUnits);
+            }
+            else
+            {
+                // 변위가 있었을 지 모르니 다시 정렬
+                BoardManager.Instance.UpdateCellVisuals(CurrentCellIndex);
+            }
+        }
+
         public void OnDragStart(Vector2 position)
         {
             _isDragging = true;
-            _dragStartPos = transform.position;
-            Debug.Log($"[Unit Drag] OnDragStart on {gameObject.name}");
+
+            // 드래그 시 셀 내의 모든 유닛을 묶음으로 처리
+            _dragGroup = BoardManager.Instance.GetUnitsAt(CurrentCellIndex);
+
+            BoardManager.Instance.ShowGrid(true); // 드래그 중 그리드 표시
         }
 
         public void OnDrag(Vector2 position)
         {
-            if (!_isDragging) return;
+            if (!_isDragging || _dragGroup == null) return;
 
             Vector3 worldPos = position;
             worldPos.z = 0f;
-            transform.position = worldPos;
+            
+            // 마우스/터치 위치와 본인의 위치 차이를 구함
+            Vector3 delta = worldPos - transform.position;
+
+            foreach(var u in _dragGroup)
+                if (u != null)
+                    u.transform.position += delta;
         }
 
         public void OnDragEnd(Vector2 position)
@@ -140,63 +176,80 @@ namespace Entities
             if (!_isDragging) return;
             _isDragging = false;
             
-            // 합성을 위해 드롭한 위치 2D 포인트에 겹친 모든 콜라이더를 가져옵니다.
-            ContactFilter2D filter = new ContactFilter2D { useLayerMask = false, useTriggers = true };
-            int hitCount = Physics2D.OverlapPoint(position, filter, OverlapResults);
-            bool mergeSuccessful = false;
+            BoardManager.Instance.ShowGrid(false); // 드래그 완료 후 그리드 숨김
 
-            for (int i = 0; i < hitCount; i++)
+            // 드롭된 위치의 셀 인덱스를 찾음
+            if (BoardManager.Instance.TryGetCellIndexFromWorldPos(position, out Vector2Int newCellIndex))
             {
-                Collider2D hit = OverlapResults[i];
-                if (hit != null && hit.gameObject != gameObject)
+                if (newCellIndex == CurrentCellIndex)
                 {
-                    Unit targetUnit = hit.GetComponent<Unit>();
-                    
-                    if (targetUnit != null)
-                    {
-                        // 동일 데이터인지 검사
-                        if (targetUnit.UnitData == UnitData)
-                        {
-                            MergeWith(targetUnit);
-                            mergeSuccessful = true;
-                            break;
-                        }
-                    }
+                    // 제자리에 내려놓음
+                    BoardManager.Instance.UpdateCellVisuals(CurrentCellIndex);
+                    _dragGroup = null;
+                    return;
+                }
+
+                // 이동 또는 스왑 시도
+                List<Unit> targetUnits = BoardManager.Instance.GetUnitsAt(newCellIndex);
+                
+                if (targetUnits.Count == 0)
+                {
+                    // 빈 공간이면 그냥 스왑(이동)
+                    BoardManager.Instance.SwapCells(CurrentCellIndex, newCellIndex);
+                }
+                else
+                {
+                    // 대상 위치에 유닛이 있다면 해당 유닛 묶음과 스왑
+                    BoardManager.Instance.SwapCells(CurrentCellIndex, newCellIndex);
                 }
             }
-
-            if (!mergeSuccessful) transform.position = _dragStartPos;
+            else
+            {
+                // 잘못된 위치에 내렸을 시 원래 자리로 복원
+                BoardManager.Instance.UpdateCellVisuals(CurrentCellIndex);
+            }
+            
+            _dragGroup = null;
         }
 
-        private void MergeWith(Unit targetUnit)
+        private void MergeUnits(List<Unit> unitsToMerge)
         {
-            int nextTier = UnitData.tier + 1;
+            int nextTier = unitData.tier + 1;
             UnitData nextUnitData = UnitDatabase.Instance.GetRandomUnitByTier(nextTier);
 
             if (nextUnitData == null)
             {
-                transform.position = _dragStartPos;
+                // 최고 티어 등의 이유로 병합 데이터가 없으면 원상복구
+                BoardManager.Instance.UpdateCellVisuals(CurrentCellIndex);
                 return;
             }
             
-            // 등록 해제
-            Vector2Int originalCell = targetUnit.CurrentCellIndex; // 타겟 유닛의 위치에 생성할 것임
-            BoardManager.Instance.UnregisterUnitAt(CurrentCellIndex);
-            BoardManager.Instance.UnregisterUnitAt(originalCell);
+            Unit u1 = unitsToMerge[0];
+            Unit u2 = unitsToMerge[1];
+            Unit u3 = unitsToMerge[2];
+
+            Vector2Int targetCell = CurrentCellIndex;
+            Vector3 spawnPos = u1.transform.position;
+
+            // 보드에서 일괄 해제
+            BoardManager.Instance.UnregisterUnitAt(targetCell, u1);
+            BoardManager.Instance.UnregisterUnitAt(targetCell, u2);
+            BoardManager.Instance.UnregisterUnitAt(targetCell, u3);
 
             // 타겟 유닛 위치에 상위 유닛 생성
-            Vector3 spawnPos = targetUnit.transform.position;
             GameObject newUnitObj = Instantiate(nextUnitData.unitPrefab, spawnPos, Quaternion.identity);
             var newUnit = newUnitObj.GetComponent<Unit>();
             if (newUnit != null)
             {
-                newUnit.Initialize(nextUnitData, originalCell);
+                newUnit.Initialize(nextUnitData, targetCell);
+                // 새 유닛 등록
+                BoardManager.Instance.RegisterUnitAt(targetCell, newUnit);
             }
-            BoardManager.Instance.RegisterUnitAt(originalCell, newUnit);
 
-            // 기존 유닛 파괴
-            Destroy(targetUnit.gameObject);
-            Destroy(gameObject);
+            // 기존 3개 유닛 파괴
+            Destroy(u1.gameObject);
+            Destroy(u2.gameObject);
+            Destroy(u3.gameObject);
         }
         #endregion
     }

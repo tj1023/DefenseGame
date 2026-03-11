@@ -16,5 +16,5 @@ MonoBehaviour:
   id: 3
   maxHealth: 80
   moveSpeed: 2
-  killRewardGold: 1
+  killRewardGold: 5
   enemyPrefab: {fileID: 9160307422917040492, guid: 2974f0db4dcd7334383fc1f8494143b8, type: 3}

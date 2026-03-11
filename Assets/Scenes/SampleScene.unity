@@ -876,6 +876,7 @@ MonoBehaviour:
   cols: 7
   cellSize: 0.5
   boardOrigin: {x: -1.5, y: 0, z: 0}
+  gridColor: {r: 0, g: 1, b: 1, a: 0.5}
 --- !u!114 &744285908
 MonoBehaviour:
   m_ObjectHideFlags: 0

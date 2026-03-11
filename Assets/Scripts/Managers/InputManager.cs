@@ -1,6 +1,5 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
-using Entities;
 using UnityEngine.EventSystems;
 
 namespace Managers
@@ -10,8 +9,12 @@ namespace Managers
         public static InputManager Instance { get; private set; }
 
         private Camera _mainCamera;
+        private IClickable _currentClickable;
         private IDraggable _currentDraggable;
         private bool _isDragging;
+        
+        private Vector2 _pointerDownScreenPos;
+        private const float DragThreshold = 10f; // 드래그 판단 기준 (픽셀)
 
         [Header("Settings")]
         [SerializeField] private LayerMask draggableLayer;
@@ -82,6 +85,7 @@ namespace Managers
 
             Vector2 screenPos = _positionAction.ReadValue<Vector2>();
             Vector2 worldPos = GetWorldPosition(screenPos);
+            _pointerDownScreenPos = screenPos;
             
             Ray ray = _mainCamera.ScreenPointToRay(screenPos);
             
@@ -90,7 +94,9 @@ namespace Managers
 
             if (hit.collider != null)
             {
+                _currentClickable = hit.collider.GetComponent<IClickable>();
                 _currentDraggable = hit.collider.GetComponent<IDraggable>();
+
                 if (_currentDraggable != null)
                 {
                     _isDragging = true;
@@ -106,10 +112,33 @@ namespace Managers
                 Vector2 screenPos = _positionAction.ReadValue<Vector2>();
                 Vector2 worldPos = GetWorldPosition(screenPos);
                 
-                _currentDraggable.OnDragEnd(worldPos);
+                // 이동 거리가 임계값 이하면 클릭으로 간주
+                if (Vector2.Distance(screenPos, _pointerDownScreenPos) <= DragThreshold)
+                {
+                    // 클릭일지라도 기존 드래그 상태를 안전하게 초기화 (원래 자리 드랍)
+                    _currentDraggable.OnDragEnd(GetWorldPosition(_pointerDownScreenPos));
+
+                    // 클릭 처리
+                    if (_currentClickable != null)
+                        _currentClickable.OnClick();
+                }
+                else
+                {
+                    // 드래그 종료 처리
+                    _currentDraggable.OnDragEnd(worldPos);
+                }
                 
+                _currentClickable = null;
                 _currentDraggable = null;
                 _isDragging = false;
+            }
+            else if (_currentClickable != null)
+            {
+                // 드래그 불가능하지만 클릭 가능한 오브젝트인 경우
+                Vector2 screenPos = _positionAction.ReadValue<Vector2>();
+                if (Vector2.Distance(screenPos, _pointerDownScreenPos) <= DragThreshold)
+                    _currentClickable.OnClick();
+                _currentClickable = null;
             }
         }
 
