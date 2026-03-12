@@ -9,6 +9,7 @@ namespace Managers
 
         public Action<int> OnGoldChanged;
         public Action<int> OnWaveChanged;
+        public Action<int, int> OnEnemyCountChanged;
         public Action OnGameOver;
         
         [Header("Game State")]
@@ -21,6 +22,8 @@ namespace Managers
 
         public int CurrentGold => currentGold;
         public int CurrentWave => currentWave;
+        public int CurrentEnemyCount => currentEnemyCount;
+        public int MaxEnemyLimit => maxEnemyLimit;
 
         private void Awake()
         {
@@ -33,6 +36,11 @@ namespace Managers
             {
                 Destroy(gameObject);
             }
+        }
+
+        private void Start()
+        {
+            OnEnemyCountChanged?.Invoke(currentEnemyCount, maxEnemyLimit);
         }
 
         public void AddGold(int amount)
@@ -57,12 +65,14 @@ namespace Managers
         public void RegisterEnemySpawned()
         {
             currentEnemyCount++;
+            OnEnemyCountChanged?.Invoke(currentEnemyCount, maxEnemyLimit);
             CheckGameOverCondition();
         }
 
         public void RegisterEnemyKilled(int rewardGold)
         {
             currentEnemyCount--;
+            OnEnemyCountChanged?.Invoke(currentEnemyCount, maxEnemyLimit);
             AddGold(rewardGold);
         }
 

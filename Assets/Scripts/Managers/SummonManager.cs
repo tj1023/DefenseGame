@@ -1,3 +1,4 @@
+using System;
 using Data;
 using UnityEngine;
 
@@ -6,14 +7,24 @@ namespace Managers
     public class SummonManager : MonoBehaviour
     {
         public static SummonManager Instance { get; private set; }
+
+        public Action<int> OnSummonCostChanged;
         
         [Header("Summon Settings")]
         [SerializeField] private int summonCost = 10;
+        [SerializeField] private int costIncrease = 2;
+
+        public int SummonCost => summonCost;
 
         private void Awake()
         {
             if (Instance == null) Instance = this;
             else Destroy(gameObject);
+        }
+
+        private void Start()
+        {
+            OnSummonCostChanged?.Invoke(summonCost);
         }
 
         public void TrySummonUnit()
@@ -38,6 +49,10 @@ namespace Managers
                         // 보드에 등록 및 위치 정렬 (UpdateCellVisuals 호출됨)
                         BoardManager.Instance.RegisterUnitAt(cellIndex, unit);
                     }
+
+                    // 소환 성공 시 비용 증가
+                    summonCost += costIncrease;
+                    OnSummonCostChanged?.Invoke(summonCost);
                 }
                 else
                 {

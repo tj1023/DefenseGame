@@ -16,6 +16,8 @@ namespace Managers
 
         private int _currentWaveIndex;
 
+        public float TimeUntilNextWave { get; private set; }
+
         private void Awake()
         {
             if (Instance == null) Instance = this;
@@ -27,17 +29,35 @@ namespace Managers
             StartNextWave();
         }
 
+        private void Update()
+        {
+            if (TimeUntilNextWave > 0)
+            {
+                TimeUntilNextWave -= Time.deltaTime;
+                if (TimeUntilNextWave <= 0)
+                {
+                    TimeUntilNextWave = 0;
+                    StartNextWave();
+                }
+            }
+        }
+
         private void StartNextWave()
         {
             if (_currentWaveIndex < waves.Count)
             {
-                StartCoroutine(SpawnWaveRoutine(waves[_currentWaveIndex]));
+                WaveData currentWaveData = waves[_currentWaveIndex];
+                StartCoroutine(SpawnWaveRoutine(currentWaveData));
+
+                // 다음 웨이브 카운트다운 즉시 시작
+                TimeUntilNextWave = currentWaveData.timeToNextWave;
+
                 _currentWaveIndex++;
                 GameManager.Instance.SetCurrentWave(_currentWaveIndex);
             }
             else
             {
-                Debug.Log("모든 웨이브가 끝남");
+                TimeUntilNextWave = 0;
             }
         }
 
@@ -51,10 +71,6 @@ namespace Managers
                     yield return new WaitForSeconds(sequence.spawnInterval);
                 }
             }
-            
-            // 다음 웨이브까지 대기
-            yield return new WaitForSeconds(waveData.timeToNextWave);
-            StartNextWave();
         }
 
         private void SpawnEnemy(EnemyData data)
