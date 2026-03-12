@@ -151,3 +151,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Entities.Unit
   unitData: {fileID: 11400000, guid: 6f56cd9907025e94cbb80275d59d3001, type: 2}
+  enemyLayer:
+    serializedVersion: 2
+    m_Bits: 64

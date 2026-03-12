@@ -81,7 +81,7 @@ namespace Entities
             IsDead = true;
             GameManager.Instance.RegisterEnemyKilled(enemyData.killRewardGold);
             
-            Destroy(gameObject);
+            ObjectPoolManager.Instance.Despawn(gameObject);
         }
 
         private void ReachEnd()

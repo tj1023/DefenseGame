@@ -783,6 +783,7 @@ GameObject:
   - component: {fileID: 744285905}
   - component: {fileID: 744285910}
   - component: {fileID: 744285904}
+  - component: {fileID: 744285911}
   - component: {fileID: 744285909}
   m_Layer: 0
   m_Name: Managers
@@ -921,6 +922,18 @@ MonoBehaviour:
   draggableLayer:
     serializedVersion: 2
     m_Bits: 8
+--- !u!114 &744285911
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 744285902}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: be25e51cb79610646b5eb1b816461bfa, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Managers.ObjectPoolManager
 --- !u!1 &769591183
 GameObject:
   m_ObjectHideFlags: 0

@@ -61,9 +61,13 @@ namespace Managers
         {
             if (data.enemyPrefab != null && spawnPoint != null)
             {
-                GameObject enemyObj = Instantiate(data.enemyPrefab, spawnPoint.position, Quaternion.identity);
-                enemyObj.GetComponent<Entities.Enemy>().Initialize(data, waypoints);
-                GameManager.Instance.RegisterEnemySpawned();
+                // ObjectPoolManager 사용
+                GameObject enemyObj = ObjectPoolManager.Instance.Spawn(data.enemyPrefab, spawnPoint.position, Quaternion.identity);
+                if (enemyObj.TryGetComponent<Entities.Enemy>(out var enemy))
+                {
+                    enemy.Initialize(data, waypoints);
+                    GameManager.Instance.RegisterEnemySpawned();
+                }
             }
         }
     }

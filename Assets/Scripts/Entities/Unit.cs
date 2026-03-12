@@ -6,14 +6,15 @@ using UnityEngine;
 
 namespace Entities
 {
-    public class Unit : MonoBehaviour, IClickable, IDraggable
+    public class Unit : MonoBehaviour, IClickable, IDraggable, IPoolable
     {
         [Header("Data")]
         [SerializeField] private UnitData unitData;
+        [SerializeField] private LayerMask enemyLayer;
 
         public UnitData UnitData => unitData;
 
-        public Vector2Int CurrentCellIndex { get; private set; }
+        private Vector2Int CurrentCellIndex { get; set; }
 
         // OverlapCircle을 위한 결과 배열 캐싱
         private static readonly Collider2D[] OverlapResults = new Collider2D[100];
@@ -21,6 +22,8 @@ namespace Entities
         [Header("Combat State")]
         private float _lastAttackTime;
         private Enemy _targetEnemy;
+        private int _framesUntilNextTargetFind;
+        private const int TargetFindInterval = 10; // 10프레임마다 타겟 탐색
 
         [Header("Drag and Merge")]
         private bool _isDragging;
@@ -33,6 +36,15 @@ namespace Entities
         {
             unitData = data;
             CurrentCellIndex = cellIndex;
+        }
+
+        public void OnSpawn()
+        {
+            // 재사용 시 상태 초기화
+            _targetEnemy = null;
+            _lastAttackTime = 0f;
+            _framesUntilNextTargetFind = 0;
+            _isDragging = false;
         }
         
         // BoardManager에서 스왑 시 호출하여 내부 인덱스를 갱신하도록 함
@@ -52,7 +64,25 @@ namespace Entities
             // 아직 초기화 전이거나 데이터가 없으면 패스
             if (unitData == null) return;
 
-            FindTarget();
+            // 타겟이 없거나 죽었으면 탐색
+            if (_targetEnemy == null || _targetEnemy.IsDead)
+            {
+                if (_framesUntilNextTargetFind <= 0)
+                {
+                    FindTarget();
+                    _framesUntilNextTargetFind = TargetFindInterval;
+                }
+                _framesUntilNextTargetFind--;
+            }
+            else
+            {
+                // 타겟이 범위를 벗어났는지 체크 (매 프레임 체크하는 대신 이것도 약간의 최적화 가능)
+                float distSq = (_targetEnemy.transform.position - transform.position).sqrMagnitude;
+                if (distSq > unitData.attackRange * unitData.attackRange)
+                {
+                    _targetEnemy = null;
+                }
+            }
 
             if (_targetEnemy != null)
             {
@@ -74,21 +104,21 @@ namespace Entities
 
         private void FindTarget()
         {
-            ContactFilter2D filter = new ContactFilter2D { useLayerMask = false, useTriggers = true };
+            ContactFilter2D filter = new ContactFilter2D { useLayerMask = true, layerMask = enemyLayer, useTriggers = true };
             int hitCount = Physics2D.OverlapCircle(transform.position, unitData.attackRange, filter, OverlapResults);
-            float minDistance = float.MaxValue;
+            float minDistanceSq = float.MaxValue;
             Enemy bestTarget = null;
 
             for (int i = 0; i < hitCount; i++)
             {
                 Collider2D col = OverlapResults[i];
-                Enemy enemy = col.GetComponent<Enemy>();
-                if (enemy != null && !enemy.IsDead)
+                // GetComponent는 무거우므로 가능하면 최적화 대상 (태그나 다른 방식 고려 가능)
+                if (col.TryGetComponent<Enemy>(out var enemy) && !enemy.IsDead)
                 {
-                    float distance = Vector3.Distance(transform.position, enemy.transform.position);
-                    if (distance < minDistance)
+                    float distSq = (transform.position - enemy.transform.position).sqrMagnitude;
+                    if (distSq < minDistanceSq)
                     {
-                        minDistance = distance;
+                        minDistanceSq = distSq;
                         bestTarget = enemy;
                     }
                 }
@@ -104,9 +134,9 @@ namespace Entities
             // 발사체 로직
             if (unitData.projectilePrefab != null)
             {
-                GameObject projObj = Instantiate(unitData.projectilePrefab, transform.position, Quaternion.identity);
-                var projectile = projObj.GetComponent<Projectile>();
-                if (projectile != null)
+                // ObjectPoolManager 사용
+                GameObject projObj = ObjectPoolManager.Instance.Spawn(unitData.projectilePrefab, transform.position, Quaternion.identity);
+                if (projObj.TryGetComponent<Projectile>(out var projectile))
                 {
                     projectile.Initialize(_targetEnemy, unitData.attackDamage);
                 }
@@ -236,20 +266,19 @@ namespace Entities
             BoardManager.Instance.UnregisterUnitAt(targetCell, u2);
             BoardManager.Instance.UnregisterUnitAt(targetCell, u3);
 
-            // 타겟 유닛 위치에 상위 유닛 생성
-            GameObject newUnitObj = Instantiate(nextUnitData.unitPrefab, spawnPos, Quaternion.identity);
-            var newUnit = newUnitObj.GetComponent<Unit>();
-            if (newUnit != null)
+            // 타겟 유닛 위치에 상위 유닛 생성 (ObjectPoolManager 사용)
+            GameObject newUnitObj = ObjectPoolManager.Instance.Spawn(nextUnitData.unitPrefab, spawnPos, Quaternion.identity);
+            if (newUnitObj.TryGetComponent<Unit>(out var newUnit))
             {
                 newUnit.Initialize(nextUnitData, targetCell);
                 // 새 유닛 등록
                 BoardManager.Instance.RegisterUnitAt(targetCell, newUnit);
             }
 
-            // 기존 3개 유닛 파괴
-            Destroy(u1.gameObject);
-            Destroy(u2.gameObject);
-            Destroy(u3.gameObject);
+            // 기존 3개 유닛 풀로 반환
+            ObjectPoolManager.Instance.Despawn(u1.gameObject);
+            ObjectPoolManager.Instance.Despawn(u2.gameObject);
+            ObjectPoolManager.Instance.Despawn(u3.gameObject);
         }
         #endregion
     }
